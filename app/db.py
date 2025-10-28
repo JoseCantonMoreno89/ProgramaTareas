@@ -70,3 +70,12 @@ def mark_done(task_id: int):
     cur.execute("UPDATE tasks SET status='done' WHERE id=?", (task_id,))
     conn.commit()
     conn.close()
+
+def get_all_tasks():
+    """Obtiene todas las tareas para sincronización"""
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM tasks ORDER BY due")
+    tasks = [dict(row) for row in cur.fetchall()]
+    conn.close()
+    return tasks
