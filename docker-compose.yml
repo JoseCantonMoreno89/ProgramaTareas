@@ -1,12 +1,10 @@
 version: '3.8'
 services:
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
+  webhook:
+    build: .
     ports:
       - "5000:5000"
     volumes:
       - .:/app
     environment:
-      - FLASK_DEBUG=1
+      - FLASK_ENV=production
