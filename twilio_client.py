@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 
 load_dotenv()
 
-TWILIO_ACCOUNT_SID = os.getenv("USc3e4b5521b41528bbc68a7b7cec07fb5")
+TWILIO_ACCOUNT_SID = os.getenv("AC94c0b567915b6de10a268901d5059771")
 TWILIO_AUTH_TOKEN  = os.getenv("571fdfac5b0bf840737cf7c204dda132")
 TWILIO_WHATSAPP_FROM = os.getenv("+14155238886")  # ej: 'whatsapp:+1415xxxxxxx'
 TARGET_NUMBER = os.getenv("+34628094958")         # tu número: 'whatsapp:+34xxxxxx'
@@ -49,3 +49,4 @@ def send_reminders_via_whatsapp():
         body = "Recordatorio de tareas próximas:\n" + "\n".join(lines)
     sid = send_whatsapp_message(body)
     return sid
+
