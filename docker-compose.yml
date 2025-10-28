@@ -3,9 +3,8 @@ services:
   webhook:
     build: .
     ports:
-      - "5000:5000"
+      - "0.0.0.0:5000:5000"  # Asegurar que escucha en todas las interfaces
     volumes:
       - .:/app
     environment:
       - FLASK_ENV=production
-    restart: unless-stopped
