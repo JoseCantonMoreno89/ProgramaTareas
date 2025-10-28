@@ -10,5 +10,9 @@ RUN pip install --no-cache-dir -r requirements-server.txt
 
 COPY . .
 
+# Inicializar la base de datos al iniciar
+RUN python -c "from db import init_db; init_db()"
+
 EXPOSE 5000
 CMD ["python", "webhook_server.py"]
+
