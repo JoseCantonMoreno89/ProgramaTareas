@@ -106,4 +106,5 @@ def home():
 
 if __name__ == "__main__":
     # Nota: en producción ejecuta con gunicorn/uvicorn detrás de nginx
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=False)
+
