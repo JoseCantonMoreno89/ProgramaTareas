@@ -20,14 +20,15 @@ services:
       
       # --- Variables de Entorno de Telegram (¡RELLENA ESTO!) ---
       # Habla con @BotFather en Telegram para obtenerlo
-      - TELEGRAM_BOT_TOKEN=TU_TOKEN_SECRETO_DEL_BOT
+      - TELEGRAM_BOT_TOKEN=8109216707:AAFTCT8gXb_tqHBWoFcrwYTfcfVUwCmp6ms
       
       # Habla con @userinfobot en Telegram para obtener tu ID
-      - TELEGRAM_CHAT_ID=TU_ID_DE_CHAT_NUMERICO
+      - TELEGRAM_CHAT_ID=730910001
       
       # La URL pública de tu servidor (¡DEBE ser la IP o dominio)
       - SERVER_URL=http://93.189.95.135:5000
 
 volumes:
   reminders-db-data:
+
 
