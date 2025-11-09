@@ -1,4 +1,6 @@
-flask
-twilio
+# requirements-server.txt
+Flask
 apscheduler
 python-dotenv
+python-telegram-bot==13.15
+
