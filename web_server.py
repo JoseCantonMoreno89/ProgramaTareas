@@ -8,6 +8,11 @@ import atexit
 from apscheduler.schedulers.background import BackgroundScheduler
 import telegram_client
 
+# --- ¡CORRECCIÓN DE CÓDIGO! ---
+# Importamos pytz para definir explícitamente la zona horaria
+import pytz
+# -------------------------------
+
 app = Flask(__name__)
 
 # --- Endpoints de Sincronización (para la App de PC) ---
@@ -49,11 +54,8 @@ def sync_tasks_from_client():
             return jsonify({"status": "error", "message": "No JSON data received"}), 400
         
         tasks = data.get("tasks", [])
-        
         conn = get_conn()
         cur = conn.cursor()
-        
-        # Limpiar la BD del servidor antes de importar
         cur.execute("DELETE FROM tasks")
         
         count = 0
@@ -63,7 +65,7 @@ def sync_tasks_from_client():
                 (id, title, description, due, status, created, whatsapp_sent) 
                 VALUES (?, ?, ?, ?, ?, ?, ?)""",
                 (
-                    task.get('id'), # Sincronizamos el ID del cliente
+                    task.get('id'),
                     task.get('title'),
                     task.get('description'),
                     task.get('due'),
@@ -91,37 +93,42 @@ def telegram_webhook():
         telegram_client.handle_telegram_update(request.get_json(force=True))
     except Exception as e:
         print(f"Error al procesar webhook de Telegram: {e}")
-    
-    # Siempre devolver 200 OK para que Telegram no reintente
     return "OK", 200
 
 # --- Inicio de la Aplicación ---
 
 if __name__ == "__main__":
-    # 1. Inicializar la base de datos del servidor
     print("Iniciando aplicación de servidor...")
     init_db()
     
-    # 2. Configurar el scheduler para los recordatorios
     print("Configurando el programador de tareas (APScheduler)...")
-    scheduler = BackgroundScheduler(daemon=True)
+    
+    # --- ¡CORRECCIÓN DE CÓDIGO! ---
+    # Le decimos explícitamente al scheduler que use la zona horaria de Madrid.
+    # Esto evita que intente adivinar la zona horaria del contenedor.
+    try:
+        server_timezone = pytz.timezone("Europe/Madrid")
+    except Exception:
+        print("No se encontró 'Europe/Madrid', usando 'UTC'.")
+        server_timezone = pytz.utc
+        
+    scheduler = BackgroundScheduler(daemon=True, timezone=server_timezone)
+    # -------------------------------
+    
     scheduler.add_job(
         telegram_client.check_and_send_reminders,
         'interval',
-        hours=5
+        hours=5  # (o minutes=1 para tus pruebas)
     )
     scheduler.start()
     print("Scheduler iniciado. Enviará recordatorios cada 5 horas.")
     
-    # 3. Configurar el webhook de Telegram
     print("Configurando webhook de Telegram...")
     if not telegram_client.setup_telegram_webhook():
         print("¡ADVERTENCIA! No se pudo configurar el webhook. "
-              "El bot no recibirá mensajes. Revisa SERVER_URL y BOT_TOKEN.")
+              "Revisa SERVER_URL y BOT_TOKEN.")
     
-    # 4. Registrar apagado limpio del scheduler
     atexit.register(lambda: scheduler.shutdown())
 
-    # 5. Iniciar el servidor Flask
     print(f"Iniciando servidor Flask en puerto 5000...")
     app.run(host="0.0.0.0", port=5000, debug=False)
