@@ -6,11 +6,11 @@ import telegram
 from db import list_pending_tasks, mark_as_principal_by_title
 
 # --- Configuración (se carga desde variables de entorno) ---
-BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+BOT_TOKEN = os.getenv("8109216707:AAFTCT8gXb_tqHBWoFcrwYTfcfVUwCmp6ms")
 # Tu ID de chat numérico personal (para que el bot TE envíe recordatorios)
-CHAT_ID = os.getenv("TELEGRAM_CHAT_ID") 
+CHAT_ID = os.getenv("730910001") 
 # La URL pública de tu servidor (para que Telegram te envíe mensajes)
-SERVER_URL = os.getenv("SERVER_URL")  # Ej: "http://93.189.95.135:5000"
+SERVER_URL = os.getenv("http://93.189.95.135:5000"")  
 
 if not all([BOT_TOKEN, CHAT_ID, SERVER_URL]):
     print("¡ADVERTENCIA! Faltan variables de entorno de Telegram (BOT_TOKEN, CHAT_ID, SERVER_URL)")
