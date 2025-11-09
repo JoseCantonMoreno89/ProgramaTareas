@@ -47,9 +47,6 @@ def mark_as_principal_by_title(title: str) -> Optional[int]:
     """Busca una tarea por título (ignorando mayúsculas) y la marca como 'principal'."""
     conn = get_conn()
     cur = conn.cursor()
-    
-    # --- ¡CORRECCIÓN DE DEPURACIÓN! ---
-    # Añadimos COLLATE NOCASE para que la búsqueda ignore mayúsculas/minúsculas
     cur.execute("SELECT id FROM tasks WHERE title = ? AND status != 'done' COLLATE NOCASE LIMIT 1", (title,))
     
     row = cur.fetchone()
@@ -58,6 +55,23 @@ def mark_as_principal_by_title(title: str) -> Optional[int]:
         return None
     task_id = row["id"]
     cur.execute("UPDATE tasks SET status = 'principal' WHERE id = ?", (task_id,))
+    conn.commit()
+    conn.close()
+    return task_id
+
+# --- ¡NUEVA FUNCIÓN! ---
+def mark_done_by_title(title: str) -> Optional[int]:
+    """Busca una tarea por título (ignorando mayúsculas) y la marca como 'done'."""
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT id FROM tasks WHERE title = ? AND status != 'done' COLLATE NOCASE LIMIT 1", (title,))
+    
+    row = cur.fetchone()
+    if not row:
+        conn.close()
+        return None
+    task_id = row["id"]
+    cur.execute("UPDATE tasks SET status = 'done' WHERE id = ?", (task_id,))
     conn.commit()
     conn.close()
     return task_id
