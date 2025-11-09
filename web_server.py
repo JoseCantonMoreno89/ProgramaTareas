@@ -94,7 +94,7 @@ if __name__ == "__main__":
     scheduler.add_job(
         telegram_client.check_and_send_reminders,
         'interval',
-        seconds=30
+        hours=5
     )
     
     # Tarea 2: Revisar si hay mensajes nuevos (comandos) cada 30 segundos
