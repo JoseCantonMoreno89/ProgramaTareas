@@ -94,7 +94,7 @@ if __name__ == "__main__":
     scheduler.add_job(
         telegram_client.check_and_send_reminders,
         'interval',
-        seconds=10
+        seconds=30
     )
     
     # Tarea 2: Revisar si hay mensajes nuevos (comandos) cada 30 segundos
@@ -112,5 +112,6 @@ if __name__ == "__main__":
     # --- ¡CAMBIO AQUÍ! ---
     print(f"Iniciando servidor Flask en puerto 8080...")
     app.run(host="0.0.0.0", port=8080, debug=False)
+
 
 
