@@ -44,11 +44,10 @@ def list_pending_tasks():
     return tasks
 
 def mark_as_principal_by_title(title: str) -> Optional[int]:
-    """Busca una tarea por título (ignorando mayúsculas) y la marca como 'principal'."""
+    """Marca como 'principal' (En progreso)"""
     conn = get_conn()
     cur = conn.cursor()
     cur.execute("SELECT id FROM tasks WHERE title = ? AND status != 'done' COLLATE NOCASE LIMIT 1", (title,))
-    
     row = cur.fetchone()
     if not row:
         conn.close()
@@ -59,19 +58,33 @@ def mark_as_principal_by_title(title: str) -> Optional[int]:
     conn.close()
     return task_id
 
-# --- ¡NUEVA FUNCIÓN! ---
 def mark_done_by_title(title: str) -> Optional[int]:
-    """Busca una tarea por título (ignorando mayúsculas) y la marca como 'done'."""
+    """Marca como 'done' (Hecha)"""
     conn = get_conn()
     cur = conn.cursor()
     cur.execute("SELECT id FROM tasks WHERE title = ? AND status != 'done' COLLATE NOCASE LIMIT 1", (title,))
-    
     row = cur.fetchone()
     if not row:
         conn.close()
         return None
     task_id = row["id"]
     cur.execute("UPDATE tasks SET status = 'done' WHERE id = ?", (task_id,))
+    conn.commit()
+    conn.close()
+    return task_id
+
+# --- ¡NUEVA FUNCIÓN! ---
+def mark_pending_by_title(title: str) -> Optional[int]:
+    """Marca como 'pending' (Pendiente)"""
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT id FROM tasks WHERE title = ? AND status != 'done' COLLATE NOCASE LIMIT 1", (title,))
+    row = cur.fetchone()
+    if not row:
+        conn.close()
+        return None
+    task_id = row["id"]
+    cur.execute("UPDATE tasks SET status = 'pending' WHERE id = ?", (task_id,))
     conn.commit()
     conn.close()
     return task_id
