@@ -7,8 +7,8 @@ import pytz # <-- ¡Importante para la corrección de zona horaria!
 from db import list_pending_tasks, mark_as_principal_by_title
 
 # --- Configuración (se carga desde variables de entorno) ---
-BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-CHAT_ID = os.getenv("TELEGRAM_CHAT_ID") 
+BOT_TOKEN = os.getenv("8109216707:AAFm4OzFjNRcHdiosrLfA_Hv0FSucB5B0EU")
+CHAT_ID = os.getenv("730910001") 
 
 if not all([BOT_TOKEN, CHAT_ID]):
     print("¡ADVERTENCIA! Faltan variables de entorno de Telegram (BOT_TOKEN, CHAT_ID)")
