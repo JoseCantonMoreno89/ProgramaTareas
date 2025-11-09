@@ -101,7 +101,7 @@ if __name__ == "__main__":
     scheduler.add_job(
         telegram_client.check_for_messages,
         'interval',
-        seconds=30
+        seconds=1
     )
     
     scheduler.start()
@@ -112,3 +112,4 @@ if __name__ == "__main__":
     # --- ¡CAMBIO AQUÍ! ---
     print(f"Iniciando servidor Flask en puerto 8080...")
     app.run(host="0.0.0.0", port=8080, debug=False)
+
