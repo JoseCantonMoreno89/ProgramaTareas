@@ -1,8 +1,5 @@
 #!/bin/bash
-# start.sh - Script de inicio del contenedor
+# start.sh
 
-echo "🔧 Inicializando base de datos..."
-python -c "from db import init_db; init_db()"
-
-echo "🚀 Iniciando servidor webhook..."
-python webhook_server.py
+echo "🚀 Iniciando servidor Flask + Scheduler + Bot de Telegram..."
+python web_server.py
