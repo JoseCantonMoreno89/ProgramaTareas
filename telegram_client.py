@@ -3,11 +3,12 @@ import os
 import re
 from datetime import datetime, timedelta
 import telegram
-from telegram import ReplyKeyboardMarkup, KeyboardButton
+# ¡Importaciones clave para los botones Inline!
+from telegram import InlineKeyboardMarkup, InlineKeyboardButton
 import pytz 
 from db import list_pending_tasks, mark_as_principal_by_title, mark_done_by_title
 
-# --- Configuración (se carga desde variables de entorno) ---
+# --- Configuración (sin cambios) ---
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID") 
 
@@ -65,120 +66,146 @@ def check_and_send_reminders():
         print(f"Error al enviar mensaje a Telegram: {e}")
 
 
-# --- Lógica del Menú ---
+# --- Lógica del Menú (Reescrita para Botones Inline) ---
 
-def _handle_start_command(msg):
+def _handle_start_command(msg=None, query=None):
     """Muestra el menú principal."""
-    keyboard = [[KeyboardButton("Ver Lista de Tareas")]]
-    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
-    bot.send_message(
-        chat_id=msg.chat_id, 
-        text="¡Hola! Soy tu bot de tareas. ¿Qué quieres hacer?",
-        reply_markup=reply_markup
-    )
+    keyboard = [[InlineKeyboardButton("Ver Lista de Tareas", callback_data="list_tasks")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    text = "¡Hola! Soy tu bot de tareas. ¿Qué quieres hacer?"
+    
+    if query: # Si venimos de un botón (CallbackQuery)
+        query.edit_message_text(text=text, reply_markup=reply_markup)
+    else: # Si es la primera vez (Mensaje)
+        bot.send_message(chat_id=msg.chat_id, text=text, reply_markup=reply_markup)
 
-def _handle_list_tasks(msg):
+def _handle_list_tasks(query):
     """Muestra las tareas pendientes como botones."""
     tasks = list_pending_tasks()
+    keyboard = [] # Aquí irán los botones de tareas
+    
     if not tasks:
-        bot.send_message(chat_id=msg.chat_id, text="No hay tareas pendientes en el servidor.")
-        _handle_start_command(msg) # Volver al menú principal
+        text = "No hay tareas pendientes en el servidor."
+    else:
+        text = "Selecciona una tarea de la lista:"
+        for t in tasks:
+            status_icon = "🟡" if t.get('status') == 'principal' else "🔴"
+            # El callback_data es el "comando oculto" que enviará el botón
+            keyboard.append([
+                InlineKeyboardButton(
+                    f"{status_icon} {t['title']}", 
+                    callback_data=f"view_task:{t['title']}"
+                )
+            ])
+    
+    # Añadimos un botón para "Volver"
+    keyboard.append([InlineKeyboardButton("« Volver al Menú", callback_data="main_menu")])
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    query.edit_message_text(text=text, reply_markup=reply_markup)
+
+def _handle_task_selected(query):
+    """Muestra las opciones 'Hacer' o 'Ignorar' para una tarea."""
+    # Extraemos el título del "comando oculto" (callback_data)
+    try:
+        task_title = query.data.split("view_task:", 1)[1]
+    except IndexError:
+        query.answer("Error al leer la tarea")
         return
 
-    keyboard = []
-    for t in tasks:
-        # Añadimos un icono al botón para claridad
-        status_icon = "🟡" if t.get('status') == 'principal' else "🔴"
-        keyboard.append([KeyboardButton(f"{status_icon} {t['title']}")])
-
-    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
-    bot.send_message(
-        chat_id=msg.chat_id, 
-        text="Selecciona una tarea de la lista:",
-        reply_markup=reply_markup
-    )
-
-def _handle_task_selected(msg, task_title_with_icon):
-    """Muestra las opciones 'Hacer' o 'Ignorar' para una tarea."""
-    # Quitamos el icono del título para el texto del botón
-    task_title = " ".join(task_title_with_icon.split(" ")[1:]) 
-    
     keyboard = [
-        [KeyboardButton(f"✅ Hacer: {task_title}")],
-        [KeyboardButton(f"❌ Ignorar: {task_title}")]
+        [InlineKeyboardButton("✅ Hacer (Marcar Principal)", callback_data=f"do_task:{task_title}")],
+        [InlineKeyboardButton("❌ Ignorar (Marcar Hecha)", callback_data=f"ignore_task:{task_title}")],
+        [InlineKeyboardButton("« Volver a la Lista", callback_data="list_tasks")]
     ]
-    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
-    bot.send_message(
-        chat_id=msg.chat_id, 
-        text=f"¿Qué quieres hacer con '{task_title}'?",
-        reply_markup=reply_markup
-    )
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    query.edit_message_text(text=f"Tarea seleccionada:\n*'{task_title}'*\n\n¿Qué quieres hacer?", reply_markup=reply_markup, parse_mode=telegram.ParseMode.MARKDOWN)
 
-def _handle_hacer_command(msg, match):
+def _handle_hacer_command(query):
     """Marca una tarea como 'principal' (Hacer)."""
-    title = match.group(1).strip()
+    try:
+        title = query.data.split("do_task:", 1)[1]
+    except IndexError:
+        query.answer("Error al leer la tarea")
+        return
+        
     task_id = mark_as_principal_by_title(title)
     if task_id:
-        reply_text = f"✅ ¡Entendido! Tarea '{title}' marcada como principal."
+        query.answer(text=f"✅ Tarea '{title}' marcada como principal.") # Pop-up de confirmación
     else:
-        reply_text = f"😕 No encontré la tarea pendiente: '{title}'."
-    bot.send_message(chat_id=msg.chat_id, text=reply_text)
-    _handle_start_command(msg) # Volver al menú principal
+        query.answer(text=f"😕 No encontré la tarea '{title}'.")
+    
+    _handle_list_tasks(query) # Volver a la lista de tareas
 
-def _handle_ignorar_command(msg, match):
+def _handle_ignorar_command(query):
     """Marca una tarea como 'done' (Ignorar)."""
-    title = match.group(1).strip()
+    try:
+        title = query.data.split("ignore_task:", 1)[1]
+    except IndexError:
+        query.answer("Error al leer la tarea")
+        return
+
     task_id = mark_done_by_title(title)
     if task_id:
-        reply_text = f"❌ Tarea '{title}' marcada como completada."
+        query.answer(text=f"❌ Tarea '{title}' marcada como completada.") # Pop-up
     else:
-        reply_text = f"😕 No encontré la tarea pendiente: '{title}'."
-    bot.send_message(chat_id=msg.chat_id, text=reply_text)
-    _handle_start_command(msg) # Volver al menú principal
+        query.answer(text=f"😕 No encontré la tarea '{title}'.")
+    
+    _handle_list_tasks(query) # Volver a la lista de tareas
+
+# --- RUTEO DE MENSAJES Y BOTONES ---
 
 def _process_message(msg):
-    """Procesa y enruta todos los mensajes entrantes."""
+    """Procesa solo mensajes de TEXTO (comandos escritos)."""
     if not msg or not msg.text:
         return
-
     body = msg.text.strip()
     
-    # 1. Comandos del Menú
+    # 1. Comando /start
     if body == "/start":
-        _handle_start_command(msg)
+        _handle_start_command(msg=msg)
         return
+
+    # 2. Comando "lo voy a hacer" (comando de texto)
+    m = re.match(r"^\s*lo voy a hacer\s+(.+)$", body, flags=re.IGNORECASE)
+    if m:
+        title = m.group(1).strip()
+        task_id = mark_as_principal_by_title(title)
+        if task_id:
+            reply_text = f"✅ ¡Entendido! Tarea '{title}' marcada como principal (por comando de texto)."
+        else:
+            reply_text = f"😕 No encontré la tarea pendiente: '{title}'."
+        bot.send_message(chat_id=msg.chat_id, text=reply_text)
+        return
+
+    # 3. Respuesta por defecto
+    bot.send_message(chat_id=msg.chat_id, text="No entendí eso. Envía /start para usar los botones.")
+
+def _process_callback_query(query):
+    """Procesa solo clics en BOTONES INLINE."""
     
-    if body == "Ver Lista de Tareas":
-        _handle_list_tasks(msg)
-        return
-
-    # 2. Comandos de Acción (con Regex)
-    m_hacer = re.match(r"^\s*✅ Hacer: (.+)$", body)
-    if m_hacer:
-        _handle_hacer_command(msg, m_hacer)
-        return
-
-    m_ignorar = re.match(r"^\s*❌ Ignorar: (.+)$", body)
-    if m_ignorar:
-        _handle_ignorar_command(msg, m_ignorar)
-        return
-
-    # 3. Comprobar si es un botón de Tarea (ej: "🔴 Comprar pan")
-    tasks = list_pending_tasks()
-    # Creamos los títulos de botón exactos (con icono)
-    task_button_titles = [f"{'🟡' if t.get('status') == 'principal' else '🔴'} {t['title']}" for t in tasks]
+    # 1. Responde al 'clic' para que el icono de "cargando" desaparezca
+    query.answer()
     
-    if body in task_button_titles:
-        _handle_task_selected(msg, body)
-        return
+    data = query.data # El "comando oculto" (ej: "list_tasks")
 
-    # 4. Respuesta por defecto
-    bot.send_message(chat_id=msg.chat_id, text="No entendí ese comando. Usando el menú principal...")
-    _handle_start_command(msg)
+    # 2. Enrutador de botones
+    if data == "main_menu":
+        _handle_start_command(query=query)
+    
+    elif data == "list_tasks":
+        _handle_list_tasks(query)
+        
+    elif data.startswith("view_task:"):
+        _handle_task_selected(query)
 
+    elif data.startswith("do_task:"):
+        _handle_hacer_command(query)
+        
+    elif data.startswith("ignore_task:"):
+        _handle_ignorar_command(query)
 
 def check_for_messages():
-    """Función llamada por el scheduler (cada 30 seg) para buscar comandos."""
+    """Función llamada por el scheduler (cada 5 seg) para buscar comandos."""
     global LAST_UPDATE_ID
     if not bot:
         return
@@ -187,8 +214,16 @@ def check_for_messages():
         updates = bot.get_updates(offset=LAST_UPDATE_ID, timeout=10)
         
         for update in updates:
-            _process_message(update.message)
+            if update.callback_query:
+                # ¡NUEVO! Si es un clic en un botón
+                _process_callback_query(update.callback_query)
+            elif update.message:
+                # Si es un mensaje de texto
+                _process_message(update.message)
+            
             LAST_UPDATE_ID = update.update_id + 1 
             
     except Exception as e:
-        print(f"Error durante el polling de Telegram: {e}")
+        # Silenciar errores comunes de red, pero registrar los demás
+        if "Timed out" not in str(e):
+            print(f"Error durante el polling de Telegram: {e}")
