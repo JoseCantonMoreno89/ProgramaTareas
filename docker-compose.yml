@@ -1,10 +1,33 @@
+# docker-compose.yml
 version: '3.8'
+
 services:
-  webhook:
+  web:
     build: .
     ports:
-      - "0.0.0.0:5000:5000"  # Asegurar que escucha en todas las interfaces
+      - "0.0.0.0:5000:5000"
     volumes:
-      - .:/app
+      # --- VOLUMEN PERSISTENTE ---
+      # Esto guarda tu base de datos fuera del contenedor,
+      # para que no se borre cuando actualices la imagen.
+      - reminders-db-data:/app/data
     environment:
+      # --- Variables de Entorno de la App ---
       - FLASK_ENV=production
+      
+      # Ruta donde se guardará la BD (dentro del volumen 'reminders-db-data')
+      - DATABASE_PATH=/app/data/reminders.db
+      
+      # --- Variables de Entorno de Telegram (¡RELLENA ESTO!) ---
+      # Habla con @BotFather en Telegram para obtenerlo
+      - TELEGRAM_BOT_TOKEN=TU_TOKEN_SECRETO_DEL_BOT
+      
+      # Habla con @userinfobot en Telegram para obtener tu ID
+      - TELEGRAM_CHAT_ID=TU_ID_DE_CHAT_NUMERICO
+      
+      # La URL pública de tu servidor (¡DEBE ser la IP o dominio)
+      - SERVER_URL=http://93.189.95.135:5000
+
+volumes:
+  reminders-db-data:
+
