@@ -5,30 +5,18 @@ services:
   web:
     build: .
     ports:
-      - "0.0.0.0:5000:5000"
+      # --- ¡CAMBIO AQUÍ! ---
+      - "0.0.0.0:8080:8080"
     volumes:
-      # --- VOLUMEN PERSISTENTE ---
-      # Esto guarda tu base de datos fuera del contenedor,
-      # para que no se borre cuando actualices la imagen.
       - reminders-db-data:/app/data
     environment:
-      # --- Variables de Entorno de la App ---
       - FLASK_ENV=production
-      
-      # Ruta donde se guardará la BD (dentro del volumen 'reminders-db-data')
       - DATABASE_PATH=/app/data/reminders.db
       
-      # --- Variables de Entorno de Telegram (¡RELLENA ESTO!) ---
-      # Habla con @BotFather en Telegram para obtenerlo
+      # --- Variables de Telegram ---
+      # (Asegúrate de que estén rellenas)
       - TELEGRAM_BOT_TOKEN=8109216707:AAFTCT8gXb_tqHBWoFcrwYTfcfVUwCmp6ms
-      
-      # Habla con @userinfobot en Telegram para obtener tu ID
       - TELEGRAM_CHAT_ID=730910001
-      
-      # La URL pública de tu servidor (¡DEBE ser la IP o dominio)
-      - SERVER_URL=http://93.189.95.135:5000
 
 volumes:
   reminders-db-data:
-
-
