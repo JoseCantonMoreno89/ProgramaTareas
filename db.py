@@ -1,16 +1,25 @@
 # db.py
 import sqlite3
+import os
 from datetime import datetime
 from typing import List, Dict, Optional
 
-DB_PATH = "reminders.db"
+# VITAL: Lee la ruta de la variable de entorno, si no existe, usa una local.
+# docker-compose.yml definirá esta variable.
+DB_PATH = os.environ.get("DATABASE_PATH", "reminders_server.db")
 
 def get_conn():
+    # Asegurarse de que el directorio (si lo hay) exista
+    db_dir = os.path.dirname(DB_PATH)
+    if db_dir:
+        os.makedirs(db_dir, exist_ok=True)
+        
     conn = sqlite3.connect(DB_PATH, detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES)
     conn.row_factory = sqlite3.Row
     return conn
 
 def init_db():
+    print(f"Inicializando base de datos del servidor en: {DB_PATH}")
     conn = get_conn()
     cur = conn.cursor()
     cur.execute("""
@@ -18,23 +27,15 @@ def init_db():
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         title TEXT NOT NULL,
         description TEXT,
-        due TEXT,                     -- ISO timestamp stored as TEXT
-        created TEXT DEFAULT (datetime('now')),
-        status TEXT DEFAULT 'pending', -- pending / done / principal
+        due TEXT,
+        created TEXT,
+        status TEXT DEFAULT 'pending',
         whatsapp_sent INTEGER DEFAULT 0
     )
     """)
     conn.commit()
     conn.close()
-
-def add_task(title: str, description: str = None, due: Optional[datetime] = None):
-    conn = get_conn()
-    cur = conn.cursor()
-    due_iso = due.isoformat(sep=' ') if due else None
-    cur.execute("INSERT INTO tasks (title, description, due) VALUES (?, ?, ?)",
-                (title, description, due_iso))
-    conn.commit()
-    conn.close()
+    print("Base de datos del servidor lista.")
 
 def list_pending_tasks():
     conn = get_conn()
@@ -42,18 +43,15 @@ def list_pending_tasks():
     cur.execute("SELECT * FROM tasks WHERE status != 'done' ORDER BY due")
     rows = cur.fetchall()
     conn.close()
-    tasks = []
-    for r in rows:
-        t = dict(r)
-        tasks.append(t)
+    tasks = [dict(r) for r in rows]
     return tasks
 
 def mark_as_principal_by_title(title: str) -> Optional[int]:
-    """Busca la primera tarea con ese título y la marca como 'principal'.
-       Devuelve el id si se actualizó, o None si no se encontró."""
+    """Busca una tarea por título y la marca como 'principal'."""
     conn = get_conn()
     cur = conn.cursor()
-    cur.execute("SELECT id FROM tasks WHERE title = ? LIMIT 1", (title,))
+    # Busca la primera tarea pendiente que coincida
+    cur.execute("SELECT id FROM tasks WHERE title = ? AND status != 'done' LIMIT 1", (title,))
     row = cur.fetchone()
     if not row:
         conn.close()
@@ -63,19 +61,3 @@ def mark_as_principal_by_title(title: str) -> Optional[int]:
     conn.commit()
     conn.close()
     return task_id
-
-def mark_done(task_id: int):
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("UPDATE tasks SET status='done' WHERE id=?", (task_id,))
-    conn.commit()
-    conn.close()
-
-def get_all_tasks():
-    """Obtiene todas las tareas para sincronización"""
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM tasks ORDER BY due")
-    tasks = [dict(row) for row in cur.fetchall()]
-    conn.close()
-    return tasks
