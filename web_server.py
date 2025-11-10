@@ -14,11 +14,7 @@ def home():
     return jsonify({
         "status": "active",
         "service": "Task Sync Server (con Telegram Bot - Modo Polling)",
-        "endpoints": {
-            "get_tasks": "GET /sync/tasks",
-            "sync_tasks": "POST /sync/tasks",
-            "health": "GET /sync/health"
-        }
+        "endpoints": { "get_tasks": "GET /sync/tasks", "sync_tasks": "POST /sync/tasks", "health": "GET /sync/health" }
     })
 
 @app.route("/sync/health", methods=["GET"])
@@ -36,7 +32,6 @@ def get_all_tasks():
 
 @app.route("/sync/tasks", methods=["POST"])
 def sync_tasks_from_client():
-    """Recibe tareas del cliente y las guarda (¡ahora con tags!)"""
     try:
         data = request.get_json()
         if not data:
@@ -50,7 +45,7 @@ def sync_tasks_from_client():
         count = 0
         for task in tasks:
             cur.execute(
-                # --- ¡CAMBIO AQUÍ! (Añadido 'tags') ---
+                # --- ¡FIX ETIQUETAS! (Añadido 'tags') ---
                 """INSERT INTO tasks 
                 (id, title, description, due, status, created, tags, whatsapp_sent) 
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
@@ -61,7 +56,7 @@ def sync_tasks_from_client():
                     task.get('due'),
                     task.get('status'),
                     task.get('created'),
-                    task.get('tags'), # <-- ¡NUEVO!
+                    task.get('tags'), # <-- ¡GUARDANDO ETIQUETAS!
                     task.get('whatsapp_sent', 0)
                 )
             )
