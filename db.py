@@ -18,6 +18,7 @@ def init_db():
     print(f"Inicializando base de datos del servidor en: {DB_PATH}")
     conn = get_conn()
     cur = conn.cursor()
+    # --- ¡CAMBIO! Añadida columna 'tags' ---
     cur.execute("""
     CREATE TABLE IF NOT EXISTS tasks (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -26,20 +27,27 @@ def init_db():
         due TEXT,
         created TEXT,
         status TEXT DEFAULT 'pending',
-        tags TEXT, -- ¡NUEVA COLUMNA!
+        tags TEXT, 
         whatsapp_sent INTEGER DEFAULT 0
     )
     """)
-    # Manejar migración
     try:
         cur.execute("SELECT tags FROM tasks LIMIT 1")
     except sqlite3.OperationalError:
         print("Migrando base de datos del servidor: Añadiendo columna 'tags'...")
         cur.execute("ALTER TABLE tasks ADD COLUMN tags TEXT")
-        
     conn.commit()
     conn.close()
     print("Base de datos del servidor lista.")
+
+# --- ¡NUEVA FUNCIÓN! ---
+def add_task_simple(title: str):
+    """Añade una tarea simple desde el bot"""
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("INSERT INTO tasks (title, status) VALUES (?, 'pending')", (title,))
+    conn.commit()
+    conn.close()
 
 def list_pending_tasks():
     conn = get_conn()
@@ -50,14 +58,24 @@ def list_pending_tasks():
     tasks = [dict(r) for r in rows]
     return tasks
 
+# --- ¡NUEVA FUNCIÓN! ---
+def get_task_by_title(title: str) -> Optional[Dict]:
+    """Obtiene todos los detalles de una tarea por su título (ignora mayúsculas)"""
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM tasks WHERE title = ? COLLATE NOCASE LIMIT 1", (title,))
+    row = cur.fetchone()
+    conn.close()
+    if row:
+        return dict(row)
+    return None
+
 def mark_as_principal_by_title(title: str) -> Optional[int]:
     conn = get_conn()
     cur = conn.cursor()
     cur.execute("SELECT id FROM tasks WHERE title = ? AND status != 'done' COLLATE NOCASE LIMIT 1", (title,))
     row = cur.fetchone()
-    if not row:
-        conn.close()
-        return None
+    if not row: return None
     task_id = row["id"]
     cur.execute("UPDATE tasks SET status = 'principal' WHERE id = ?", (task_id,))
     conn.commit()
@@ -69,9 +87,7 @@ def mark_done_by_title(title: str) -> Optional[int]:
     cur = conn.cursor()
     cur.execute("SELECT id FROM tasks WHERE title = ? AND status != 'done' COLLATE NOCASE LIMIT 1", (title,))
     row = cur.fetchone()
-    if not row:
-        conn.close()
-        return None
+    if not row: return None
     task_id = row["id"]
     cur.execute("UPDATE tasks SET status = 'done' WHERE id = ?", (task_id,))
     conn.commit()
@@ -83,11 +99,25 @@ def mark_pending_by_title(title: str) -> Optional[int]:
     cur = conn.cursor()
     cur.execute("SELECT id FROM tasks WHERE title = ? AND status != 'done' COLLATE NOCASE LIMIT 1", (title,))
     row = cur.fetchone()
+    if not row: return None
+    task_id = row["id"]
+    cur.execute("UPDATE tasks SET status = 'pending' WHERE id = ?", (task_id,))
+    conn.commit()
+    conn.close()
+    return task_id
+
+# --- ¡NUEVA FUNCIÓN! ---
+def delete_task_by_title(title: str) -> Optional[int]:
+    """Elimina una tarea por su título (ignora mayúsculas)"""
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT id FROM tasks WHERE title = ? COLLATE NOCASE LIMIT 1", (title,))
+    row = cur.fetchone()
     if not row:
         conn.close()
         return None
     task_id = row["id"]
-    cur.execute("UPDATE tasks SET status = 'pending' WHERE id = ?", (task_id,))
+    cur.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
     conn.commit()
     conn.close()
     return task_id
