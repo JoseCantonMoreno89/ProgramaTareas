@@ -3,14 +3,11 @@ from flask import Flask, request, Response, jsonify
 from db import get_conn, init_db
 import sqlite3
 import atexit
-
 from apscheduler.schedulers.background import BackgroundScheduler
 import telegram_client
-import pytz # Aún necesitamos pytz para el scheduler
+import pytz
 
 app = Flask(__name__)
-
-# --- Endpoints de Sincronización (para la App de PC) ---
 
 @app.route("/")
 def home():
@@ -39,6 +36,7 @@ def get_all_tasks():
 
 @app.route("/sync/tasks", methods=["POST"])
 def sync_tasks_from_client():
+    """Recibe tareas del cliente y las guarda (¡ahora con tags!)"""
     try:
         data = request.get_json()
         if not data:
@@ -52,9 +50,10 @@ def sync_tasks_from_client():
         count = 0
         for task in tasks:
             cur.execute(
+                # --- ¡CAMBIO AQUÍ! (Añadido 'tags') ---
                 """INSERT INTO tasks 
-                (id, title, description, due, status, created, whatsapp_sent) 
-                VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (id, title, description, due, status, created, tags, whatsapp_sent) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     task.get('id'),
                     task.get('title'),
@@ -62,6 +61,7 @@ def sync_tasks_from_client():
                     task.get('due'),
                     task.get('status'),
                     task.get('created'),
+                    task.get('tags'), # <-- ¡NUEVO!
                     task.get('whatsapp_sent', 0)
                 )
             )
@@ -76,42 +76,23 @@ def sync_tasks_from_client():
         return jsonify({"status": "error", "message": f"Error: {str(e)}"}), 500
 
 # --- Inicio de la Aplicación ---
-
 if __name__ == "__main__":
     print("Iniciando aplicación de servidor...")
     init_db()
-    
     print("Configurando el programador de tareas (APScheduler)...")
-    
     try:
         server_timezone = pytz.timezone("Europe/Madrid")
     except Exception:
         server_timezone = pytz.utc
-        
     scheduler = BackgroundScheduler(daemon=True, timezone=server_timezone)
-    
-    # Tarea 1: Enviar recordatorios cada 5 horas
     scheduler.add_job(
-        telegram_client.check_and_send_reminders,
-        'interval',
-        hours=5
+        telegram_client.check_and_send_reminders, 'interval', hours=5
     )
-    
-    # Tarea 2: Revisar si hay mensajes nuevos (comandos) cada 30 segundos
     scheduler.add_job(
-        telegram_client.check_for_messages,
-        'interval',
-        seconds=1
+        telegram_client.check_for_messages, 'interval', seconds=5
     )
-    
     scheduler.start()
-    print("Scheduler iniciado con 2 tareas: Recordatorios (c/ 5h) y Polling (c/ 30s).")
-    
+    print("Scheduler iniciado con 2 tareas: Recordatorios (c/ 5h) y Polling (c/ 5s).")
     atexit.register(lambda: scheduler.shutdown())
-
-    # --- ¡CAMBIO AQUÍ! ---
     print(f"Iniciando servidor Flask en puerto 8080...")
     app.run(host="0.0.0.0", port=8080, debug=False)
-
-
-
