@@ -45,7 +45,7 @@ def sync_tasks_from_client():
         count = 0
         for task in tasks:
             cur.execute(
-                # --- ¡FIX ETIQUETAS! (Añadido 'tags') ---
+                # --- ¡FIX ETIQUETAS (Req 2)! ---
                 """INSERT INTO tasks 
                 (id, title, description, due, status, created, tags, whatsapp_sent) 
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
