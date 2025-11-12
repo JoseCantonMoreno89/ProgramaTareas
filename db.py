@@ -18,7 +18,7 @@ def init_db():
     print(f"Inicializando base de datos del servidor en: {DB_PATH}")
     conn = get_conn()
     cur = conn.cursor()
-    # --- ¡CAMBIO! Añadida columna 'tags' ---
+    # --- ¡FIX ETIQUETAS (Req 2)! ---
     cur.execute("""
     CREATE TABLE IF NOT EXISTS tasks (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -40,25 +40,27 @@ def init_db():
     conn.close()
     print("Base de datos del servidor lista.")
 
-# --- ¡NUEVA FUNCIÓN! ---
-def add_task_simple(title: str):
+# --- ¡NUEVA FUNCIÓN! (Req 6) ---
+def add_task_from_bot(title: str, description: str = ""):
     """Añade una tarea simple desde el bot"""
     conn = get_conn()
     cur = conn.cursor()
-    cur.execute("INSERT INTO tasks (title, status) VALUES (?, 'pending')", (title,))
+    cur.execute("INSERT INTO tasks (title, description, status) VALUES (?, ?, 'pending')", (title, description))
     conn.commit()
     conn.close()
 
-def list_pending_tasks():
+# --- ¡NUEVA FUNCIÓN! (Req 5, 7) ---
+def list_all_tasks():
+    """Obtiene TODAS las tareas, incluidas las hechas"""
     conn = get_conn()
     cur = conn.cursor()
-    cur.execute("SELECT * FROM tasks WHERE status != 'done' ORDER BY due")
+    cur.execute("SELECT * FROM tasks ORDER BY due")
     rows = cur.fetchall()
     conn.close()
     tasks = [dict(r) for r in rows]
     return tasks
 
-# --- ¡NUEVA FUNCIÓN! ---
+# --- ¡NUEVA FUNCIÓN! (Req 5) ---
 def get_task_by_title(title: str) -> Optional[Dict]:
     """Obtiene todos los detalles de una tarea por su título (ignora mayúsculas)"""
     conn = get_conn()
@@ -85,7 +87,7 @@ def mark_as_principal_by_title(title: str) -> Optional[int]:
 def mark_done_by_title(title: str) -> Optional[int]:
     conn = get_conn()
     cur = conn.cursor()
-    cur.execute("SELECT id FROM tasks WHERE title = ? AND status != 'done' COLLATE NOCASE LIMIT 1", (title,))
+    cur.execute("SELECT id FROM tasks WHERE title = ? COLLATE NOCASE LIMIT 1", (title,)) # Permitir marcar 'principal' como 'done'
     row = cur.fetchone()
     if not row: return None
     task_id = row["id"]
@@ -97,7 +99,7 @@ def mark_done_by_title(title: str) -> Optional[int]:
 def mark_pending_by_title(title: str) -> Optional[int]:
     conn = get_conn()
     cur = conn.cursor()
-    cur.execute("SELECT id FROM tasks WHERE title = ? AND status != 'done' COLLATE NOCASE LIMIT 1", (title,))
+    cur.execute("SELECT id FROM tasks WHERE title = ? COLLATE NOCASE LIMIT 1", (title,))
     row = cur.fetchone()
     if not row: return None
     task_id = row["id"]
@@ -106,7 +108,7 @@ def mark_pending_by_title(title: str) -> Optional[int]:
     conn.close()
     return task_id
 
-# --- ¡NUEVA FUNCIÓN! ---
+# --- ¡NUEVA FUNCIÓN! (Req 3) ---
 def delete_task_by_title(title: str) -> Optional[int]:
     """Elimina una tarea por su título (ignora mayúsculas)"""
     conn = get_conn()
