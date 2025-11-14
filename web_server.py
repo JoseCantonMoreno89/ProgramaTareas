@@ -6,6 +6,7 @@ import atexit
 from apscheduler.schedulers.background import BackgroundScheduler
 import telegram_client
 import pytz
+import subprocess # <-- ¡CAMBIO AÑADIDO! (Importación para el webhook)
 
 app = Flask(__name__)
 
@@ -14,7 +15,13 @@ def home():
     return jsonify({
         "status": "active",
         "service": "Task Sync Server (con Telegram Bot - Modo Polling)",
-        "endpoints": { "get_tasks": "GET /sync/tasks", "sync_tasks": "POST /sync/tasks", "health": "GET /sync/health" }
+        # ¡CAMBIO AÑADIDO! He añadido el nuevo endpoint a la lista
+        "endpoints": { 
+            "get_tasks": "GET /sync/tasks", 
+            "sync_tasks": "POST /sync/tasks", 
+            "health": "GET /sync/health",
+            "github_webhook": "POST /github-webhook-secreto-1a9b2c8d"
+        }
     })
 
 @app.route("/sync/health", methods=["GET"])
@@ -69,6 +76,22 @@ def sync_tasks_from_client():
         print(f"Error en POST /sync/tasks: {e}")
         return jsonify({"status": "error", "message": f"Error: {str(e)}"}), 500
 
+# --- ¡CAMBIO AÑADIDO! (Webhook de GitHub) ---
+@app.route("/github-webhook-secreto-1a9b2c8d", methods=["POST"])
+def github_webhook():
+    """
+    Recibe el "aviso" de GitHub y ejecuta el script de despliegue.
+    """
+    print("¡Webhook de GitHub recibido! Iniciando despliegue...")
+    try:
+        # Llama al script deploy.sh
+        # ¡IMPORTANTE! Cambia esto por tu ruta real
+        subprocess.Popen(["/ruta/completa/a/tu/ProgramaTareas/deploy.sh"])
+        return jsonify({"status": "despliegue iniciado"}), 200
+    except Exception as e:
+        print(f"Error al ejecutar deploy.sh: {e}")
+        return jsonify({"status": "error"}), 500
+
 # --- Inicio de la Aplicación ---
 if __name__ == "__main__":
     print("Iniciando aplicación de servidor...")
@@ -80,30 +103,28 @@ if __name__ == "__main__":
         server_timezone = pytz.utc
     scheduler = BackgroundScheduler(daemon=True, timezone=server_timezone)
     
-    # --- ¡CAMBIO! 3 Tareas en el Scheduler ---
-    
-    # 1. (NUEVA) Resumen general de tareas cada 2 horas
+    # 1. Resumen general de tareas cada 2 horas (en horas pares)
     scheduler.add_job(
-        telegram_client.send_full_summary, 'interval', hours=2
+        telegram_client.send_full_summary,
+        trigger='cron',
+        hour='*/2',
+        minute='0'
     )
     
-    # 2. (MODIFICADA) Recordatorio urgente cada 15 minutos
+    # 2. Recordatorio urgente cada 15 minutos
     scheduler.add_job(
         telegram_client.check_and_send_expiry_reminders, 'interval', minutes=15
     )
     
-    # 3. (EXISTENTE) Polling de comandos del bot cada 5 segundos
+    # 3. Polling de comandos del bot cada 5 segundos
     scheduler.add_job(
         telegram_client.check_for_messages, 'interval', seconds=5
     )
     
     scheduler.start()
-    print("Scheduler iniciado con 3 tareas: Resumen (c/ 2h), Recordatorio Urgente (c/ 15m) y Polling (c/ 5s).")
+    
+    print("Scheduler iniciado con 3 tareas: Resumen (c/ 2h en hora par), Recordatorio Urgente (c/ 15m) y Polling (c/ 5s).")
     
     atexit.register(lambda: scheduler.shutdown())
     print(f"Iniciando servidor Flask en puerto 8080...")
     app.run(host="0.0.0.0", port=8080, debug=False)
-
-
-
-
