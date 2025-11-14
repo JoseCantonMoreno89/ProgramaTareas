@@ -1,6 +1,6 @@
 #!/bin/bash
 # deploy.sh
-
+set -e
 # 1. Define tus rutas
 PROJECT_DIR="/app"
 LOCK_FILE="$PROJECT_DIR/deploy.lock" # Un archivo vacío que usaremos como bloqueo
