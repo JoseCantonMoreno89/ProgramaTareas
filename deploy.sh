@@ -2,7 +2,7 @@
 # deploy.sh
 
 # 1. Define tus rutas
-PROJECT_DIR="/ruta/completa/a/tu/ProgramaTareas"
+PROJECT_DIR="/home/xrdpuser/ProgramaTareas"
 LOCK_FILE="$PROJECT_DIR/deploy.lock" # Un archivo vacío que usaremos como bloqueo
 
 # 2. Comprueba si el archivo de bloqueo existe
