@@ -84,7 +84,7 @@ if __name__ == "__main__":
     
     # 1. (NUEVA) Resumen general de tareas cada 2 horas
     scheduler.add_job(
-        telegram_client.send_full_summary, 'interval', seconds=30
+        telegram_client.send_full_summary, 'interval', hours=2
     )
     
     # 2. (MODIFICADA) Recordatorio urgente cada 15 minutos
@@ -103,5 +103,6 @@ if __name__ == "__main__":
     atexit.register(lambda: scheduler.shutdown())
     print(f"Iniciando servidor Flask en puerto 8080...")
     app.run(host="0.0.0.0", port=8080, debug=False)
+
 
 
