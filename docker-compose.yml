@@ -18,11 +18,12 @@ services:
       
       # --- Variables de Telegram ---
       # (Asegúrate de que estén rellenas)
-      - TELEGRAM_BOT_TOKEN=8109216707:AAFm4OzFjNRcHdiosrLfA_Hv0FSucB5B0EU
-      - TELEGRAM_CHAT_ID=730910001
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
 
 volumes:
   reminders-db-data:
+
 
 
 
