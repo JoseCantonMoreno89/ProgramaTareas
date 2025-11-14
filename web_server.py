@@ -82,7 +82,7 @@ def github_webhook():
     try:
         # --- ¡CORRECCIÓN AQUÍ! ---
         # Reemplaza esta ruta por la que te dio el comando 'pwd'
-        ruta_script = "/ProgramaTareas/deploy.sh" 
+        ruta_script = "/app/deploy.sh" 
 
         subprocess.Popen([ruta_script])
         return jsonify({"status": "despliegue iniciado"}), 200
@@ -118,6 +118,7 @@ if __name__ == "__main__":
     atexit.register(lambda: scheduler.shutdown())
     print(f"Iniciando servidor Flask en puerto 8080...")
     app.run(host="0.0.0.0", port=8080, debug=False)
+
 
 
 
