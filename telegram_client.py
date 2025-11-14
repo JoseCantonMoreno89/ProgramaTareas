@@ -7,7 +7,7 @@ from telegram import InlineKeyboardMarkup, InlineKeyboardButton
 import pytz 
 from db import (list_all_tasks, mark_as_principal_by_title, mark_done_by_title, 
                 mark_pending_by_title, get_task_by_title, add_task_from_bot, 
-                delete_task_by_title) # <-- Nuevas importaciones
+                delete_task_by_title)
 
 # --- Configuración ---
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -25,40 +25,78 @@ def _parse_due(due_value: str):
     try: return datetime.fromisoformat(due_value)
     except (ValueError, TypeError): return None 
 
-def check_and_send_reminders():
-    """(Req 5) Comprueba TODAS las tareas y filtra las pendientes"""
+# --- ¡NUEVA FUNCIÓN! (Req 1) ---
+def send_full_summary():
+    """Envía un resumen de TODAS las tareas pendientes y en progreso."""
     if not bot: return
-    print(f"[{datetime.now()}] Ejecutando envío de recordatorios Telegram...")
+    print(f"[{datetime.now()}] Enviando resumen general de tareas...")
     
-    all_tasks = list_all_tasks() # Obtenemos TODAS
+    all_tasks = list_all_tasks()
+    tasks_to_send = [t for t in all_tasks if t.get('status') != 'done']
+
+    if not tasks_to_send:
+        body = "Resumen de Tareas: No tienes ninguna tarea activa. ¡Buen trabajo!"
+    else:
+        body = "🗓️ *Resumen de Tareas Activas (Cada 2h)*\n\n"
+        lines_pending = []
+        lines_principal = []
+        
+        for t in tasks_to_send:
+            if t['status'] == 'principal':
+                lines_principal.append(f"🟡 *{t['title']}*")
+            else:
+                lines_pending.append(f"🔴 {t['title']}")
+        
+        if lines_principal:
+            body += "*En Progreso:*\n" + "\n".join(lines_principal) + "\n\n"
+        if lines_pending:
+            body += "*Pendientes:*\n" + "\n".join(lines_pending)
+            
+    try:
+        bot.send_message(chat_id=CHAT_ID, text=body, parse_mode=telegram.ParseMode.MARKDOWN)
+        print("Resumen general enviado.")
+    except Exception as e: 
+        print(f"Error al enviar resumen general: {e}")
+
+# --- ¡FUNCIÓN MODIFICADA! (Req 2) ---
+def check_and_send_expiry_reminders():
+    """Envía un recordatorio URGENTE si una tarea caduca en 30 min."""
+    if not bot: return
+    print(f"[{datetime.now()}] Buscando recordatorios urgentes...")
     
-    # Filtramos solo las pendientes/en progreso
+    all_tasks = list_all_tasks()
     tasks_to_check = [t for t in all_tasks if t.get('status') != 'done']
 
     now = datetime.now(SERVER_TIMEZONE)
-    soon = now + timedelta(hours=2) # (Req 4) Avisar con 2 horas
+    soon = now + timedelta(minutes=30) # ¡Ventana de 30 minutos!
     
     lines = []
-    for t in tasks_to_check: # Usamos la lista filtrada
+    for t in tasks_to_check:
         due_naive = _parse_due(t.get('due'))
         status_icon = "🟡" if t.get('status') == 'principal' else "🔴"
         if due_naive:
             due_aware = SERVER_TIMEZONE.localize(due_naive.replace(tzinfo=None))
+            
+            # Comparamos con el nuevo 'soon' (30 min)
             if (now <= due_aware <= soon):
-                lines.append(f"{status_icon} *{t['title']}* — Entrega: {due_aware.strftime('%Y-%m-%d %H:%M')}")
+                lines.append(f"{status_icon} *{t['title']}* — ¡Vence {due_aware.strftime('a las %H:%M')}!")
                 
-    if not lines: body = "¡Buen trabajo! No tienes tareas próximas en las siguientes 2 horas."
-    else: body = "🔔 *Recordatorio de Tareas Próximas:*\n\n" + "\n".join(lines)
-    
-    try:
-        bot.send_message(chat_id=CHAT_ID, text=body, parse_mode=telegram.ParseMode.MARKDOWN)
-        print("Mensaje de recordatorio enviado a Telegram.")
-    except Exception as e: print(f"Error al enviar mensaje a Telegram: {e}")
+    # Si encontramos tareas urgentes, las enviamos
+    if lines:
+        body = "🔔 *¡AVISO DE VENCIMIENTO!* 🔔\n\nEstas tareas vencen en menos de 30 minutos:\n" + "\n".join(lines)
+        try:
+            bot.send_message(chat_id=CHAT_ID, text=body, parse_mode=telegram.ParseMode.MARKDOWN)
+            print("¡Aviso de vencimiento enviado!")
+        except Exception as e: 
+            print(f"Error al enviar aviso de vencimiento: {e}")
+    else:
+        # Si no hay tareas urgentes, no envía NADA (para no ser molesto)
+        print("No hay tareas urgentes.")
 
-# --- Lógica del Menú (Req 3, 4) ---
+
+# --- Lógica del Menú (Sin cambios) ---
 
 def _handle_start_command(msg=None, query=None):
-    """Muestra el menú principal con las nuevas opciones."""
     keyboard = [
         [InlineKeyboardButton("🗒️ Ver Tareas", callback_data="list_tasks")],
         [InlineKeyboardButton("➕ Crear Tarea", callback_data="create_task")],
@@ -71,18 +109,15 @@ def _handle_start_command(msg=None, query=None):
         if query: query.edit_message_text(text=text, reply_markup=reply_markup)
         else: bot.send_message(chat_id=msg.chat_id, text=text, reply_markup=reply_markup)
     except telegram.error.BadRequest as e:
-        if "Message is not modified" in str(e): pass # Ignorar si el menú ya está visible
+        if "Message is not modified" in str(e): pass
         else: print(f"Error en start_command: {e}")
 
-
 def _handle_help_command(query):
-    """(Req 4) Muestra el mensaje de ayuda."""
     text = (
         "🤖 *Ayuda del Bot de Tareas*\n\n"
-        "Este bot te permite gestionar las tareas de tu aplicación de escritorio:\n\n"
-        "1.  *Ver Tareas*: Te muestra una lista de *todas* las tareas. Al pulsar una, puedes ver su descripción y cambiar su estado.\n"
+        "1.  *Ver Tareas*: Muestra todas tus tareas. Al pulsar una, ves su descripción y puedes cambiar su estado (Pendiente, En progreso, Hecha).\n"
         "2.  *Crear Tarea*: Te da instrucciones para crear una tarea nueva.\n"
-        "3.  *Eliminar Tarea*: Te permite seleccionar una tarea para borrarla permanentemente.\n\n"
+        "3.  *Eliminar Tarea*: Te permite seleccionar una tarea para borrarla.\n\n"
         "*Sintaxis de Creación:*\n"
         "`/crear Título de la Tarea`\n"
         "`/crear Título | Con descripción`"
@@ -92,7 +127,6 @@ def _handle_help_command(query):
     query.edit_message_text(text=text, reply_markup=reply_markup, parse_mode=telegram.ParseMode.MARKDOWN)
 
 def _handle_create_command(query):
-    """(Req 6) Instruye al usuario sobre cómo crear una tarea."""
     text = (
         "Escribe un mensaje con uno de estos formatos:\n\n"
         "1. Solo Título:\n"
@@ -105,8 +139,7 @@ def _handle_create_command(query):
     query.edit_message_text(text=text, reply_markup=reply_markup, parse_mode=telegram.ParseMode.MARKDOWN)
 
 def _handle_list_tasks(query, action: str = "view"):
-    """(Req 7) Muestra TODAS las tareas (incluidas las hechas)"""
-    tasks = list_all_tasks() # ¡Obtenemos TODAS!
+    tasks = list_all_tasks()
     keyboard = []
     
     if not tasks:
@@ -115,12 +148,11 @@ def _handle_list_tasks(query, action: str = "view"):
         if action == "view":
             text = "Selecciona una tarea para ver sus detalles:"
             callback_prefix = "view_task:"
-        else: # action == "delete"
+        else:
             text = "Selecciona la tarea que quieres ELIMINAR:"
             callback_prefix = "delete_task:"
             
         for t in tasks:
-            # --- ¡CAMBIO (Req 7)! ---
             if t['status'] == 'done': status_icon = "🟢"
             elif t['status'] == 'principal': status_icon = "🟡"
             else: status_icon = "🔴"
@@ -137,7 +169,6 @@ def _handle_list_tasks(query, action: str = "view"):
     query.edit_message_text(text=text, reply_markup=reply_markup)
 
 def _handle_task_selected(query):
-    """(Req 5) Muestra la descripción y las 3 opciones."""
     try:
         task_title = query.data.split("view_task:", 1)[1]
     except IndexError:
@@ -150,7 +181,6 @@ def _handle_task_selected(query):
         _handle_list_tasks(query, action="view")
         return
 
-    # --- ¡NUEVO! Mostrar descripción (Req 5) ---
     description = task.get('description')
     if not description:
         description = "_(Sin descripción)_"
@@ -194,10 +224,9 @@ def _handle_set_status(query):
     if not task_id:
         query.answer(f"😕 No encontré la tarea '{title}'.")
     
-    _handle_list_tasks(query, action="view") # Volver a la lista
+    _handle_list_tasks(query, action="view")
 
 def _handle_delete_task(query):
-    """(Req 3) Procesa la eliminación de una tarea."""
     try:
         title = query.data.split("delete_task:", 1)[1]
     except IndexError:
@@ -210,11 +239,7 @@ def _handle_delete_task(query):
         query.answer(text=f"😕 No encontré la tarea '{title}'.")
     _handle_list_tasks(query, action="delete")
 
-
-# --- RUTEO DE MENSAJES Y BOTONES ---
-
 def _process_message(msg):
-    """Procesa solo mensajes de TEXTO (comandos escritos)."""
     if not msg or not msg.text: return
     body = msg.text.strip()
     
@@ -222,7 +247,6 @@ def _process_message(msg):
         _handle_start_command(msg=msg)
         return
     
-    # --- ¡CAMBIO! (Req 6) Comando /crear con descripción ---
     m_crear = re.match(r"^\s*/crear\s+([^|]+)(?:\s*\|\s*(.+))?$", body, flags=re.IGNORECASE)
     if m_crear:
         title = m_crear.group(1).strip()
@@ -243,7 +267,6 @@ def _process_message(msg):
     bot.send_message(chat_id=msg.chat_id, text="No entendí eso. Envía /start para usar los botones.")
 
 def _process_callback_query(query):
-    """Procesa solo clics en BOTONES INLINE."""
     query.answer()
     data = query.data
 
@@ -265,7 +288,6 @@ def _process_callback_query(query):
         _handle_delete_task(query)
 
 def check_for_messages():
-    """Función llamada por el scheduler (cada 5 seg) para buscar comandos."""
     global LAST_UPDATE_ID
     if not bot: return
     try:
