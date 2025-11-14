@@ -11,6 +11,9 @@ RUN apt-get update && apt-get install -y git python3-pip curl
 RUN curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
 RUN chmod +x /usr/local/bin/docker-compose
 
+RUN mkdir -p /root/.ssh && \
+    ssh-keyscan github.com >> /root/.ssh/known_hosts
+
 # Forzamos la instalación de pytz
 RUN pip install --no-cache-dir pytz
 # --- FIN DEL CAMBIO ---
@@ -26,3 +29,4 @@ RUN chmod +x deploy.sh
 
 EXPOSE 8080
 CMD ["./start.sh"]
+
