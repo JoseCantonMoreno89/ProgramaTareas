@@ -86,7 +86,7 @@ def github_webhook():
     try:
         # Llama al script deploy.sh
         # ¡IMPORTANTE! Cambia esto por tu ruta real
-        subprocess.Popen(["/ruta/completa/a/tu/ProgramaTareas/deploy.sh"])
+        subprocess.Popen(["/home/xrdpuser/ProgramaTareas/deploy.sh"])
         return jsonify({"status": "despliegue iniciado"}), 200
     except Exception as e:
         print(f"Error al ejecutar deploy.sh: {e}")
@@ -128,3 +128,4 @@ if __name__ == "__main__":
     atexit.register(lambda: scheduler.shutdown())
     print(f"Iniciando servidor Flask en puerto 8080...")
     app.run(host="0.0.0.0", port=8080, debug=False)
+
