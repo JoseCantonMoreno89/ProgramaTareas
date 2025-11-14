@@ -11,6 +11,7 @@ services:
       - reminders-db-data:/app/data
       # --- ¡AÑADE ESTA LÍNEA! ---
       - /var/run/docker.sock:/var/run/docker.sock
+      - /home/xrdpuser/.ssh:/root/.ssh:ro
     environment:
       - FLASK_ENV=production
       - DATABASE_PATH=/app/data/reminders.db
@@ -22,5 +23,6 @@ services:
 
 volumes:
   reminders-db-data:
+
 
 
