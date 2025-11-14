@@ -9,6 +9,8 @@ services:
       - "0.0.0.0:8080:8080"
     volumes:
       - reminders-db-data:/app/data
+      # --- ¡AÑADE ESTA LÍNEA! ---
+      - /var/run/docker.sock:/var/run/docker.sock
     environment:
       - FLASK_ENV=production
       - DATABASE_PATH=/app/data/reminders.db
@@ -20,4 +22,5 @@ services:
 
 volumes:
   reminders-db-data:
+
 
