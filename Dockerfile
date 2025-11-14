@@ -13,9 +13,11 @@ COPY . .
 
 # Dar permisos de ejecución al script de inicio
 RUN chmod +x start.sh
+RUN chmod +x deploy.sh
 
 # --- ¡CAMBIO AQUÍ! ---
 EXPOSE 8080
 
 # Usar el script de inicio
 CMD ["./start.sh"]
+
