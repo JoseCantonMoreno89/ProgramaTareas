@@ -1,4 +1,5 @@
 # web_server.py
+# Hola
 from flask import Flask, request, Response, jsonify
 from db import get_conn, init_db
 import sqlite3
@@ -128,4 +129,5 @@ if __name__ == "__main__":
     atexit.register(lambda: scheduler.shutdown())
     print(f"Iniciando servidor Flask en puerto 8080...")
     app.run(host="0.0.0.0", port=8080, debug=False)
+
 
