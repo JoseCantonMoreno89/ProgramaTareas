@@ -45,7 +45,6 @@ def sync_tasks_from_client():
         count = 0
         for task in tasks:
             cur.execute(
-                # --- ¡FIX ETIQUETAS (Req 2)! ---
                 """INSERT INTO tasks 
                 (id, title, description, due, status, created, tags, whatsapp_sent) 
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
@@ -56,7 +55,7 @@ def sync_tasks_from_client():
                     task.get('due'),
                     task.get('status'),
                     task.get('created'),
-                    task.get('tags'), # <-- ¡GUARDANDO ETIQUETAS!
+                    task.get('tags'), 
                     task.get('whatsapp_sent', 0)
                 )
             )
@@ -80,14 +79,27 @@ if __name__ == "__main__":
     except Exception:
         server_timezone = pytz.utc
     scheduler = BackgroundScheduler(daemon=True, timezone=server_timezone)
+    
+    # --- ¡CAMBIO! 3 Tareas en el Scheduler ---
+    
+    # 1. (NUEVA) Resumen general de tareas cada 2 horas
     scheduler.add_job(
-        telegram_client.check_and_send_reminders, 'interval', hours=5
+        telegram_client.send_full_summary, 'interval', hours=2
     )
+    
+    # 2. (MODIFICADA) Recordatorio urgente cada 15 minutos
+    scheduler.add_job(
+        telegram_client.check_and_send_expiry_reminders, 'interval', minutes=15
+    )
+    
+    # 3. (EXISTENTE) Polling de comandos del bot cada 5 segundos
     scheduler.add_job(
         telegram_client.check_for_messages, 'interval', seconds=5
     )
+    
     scheduler.start()
-    print("Scheduler iniciado con 2 tareas: Recordatorios (c/ 5h) y Polling (c/ 5s).")
+    print("Scheduler iniciado con 3 tareas: Resumen (c/ 2h), Recordatorio Urgente (c/ 15m) y Polling (c/ 5s).")
+    
     atexit.register(lambda: scheduler.shutdown())
     print(f"Iniciando servidor Flask en puerto 8080...")
     app.run(host="0.0.0.0", port=8080, debug=False)
