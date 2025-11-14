@@ -1,5 +1,4 @@
 # web_server.py
-# Hola
 from flask import Flask, request, Response, jsonify
 from db import get_conn, init_db
 import sqlite3
@@ -7,7 +6,7 @@ import atexit
 from apscheduler.schedulers.background import BackgroundScheduler
 import telegram_client
 import pytz
-import subprocess # <-- ¡CAMBIO AÑADIDO! (Importación para el webhook)
+import subprocess 
 
 app = Flask(__name__)
 
@@ -16,7 +15,6 @@ def home():
     return jsonify({
         "status": "active",
         "service": "Task Sync Server (con Telegram Bot - Modo Polling)",
-        # ¡CAMBIO AÑADIDO! He añadido el nuevo endpoint a la lista
         "endpoints": { 
             "get_tasks": "GET /sync/tasks", 
             "sync_tasks": "POST /sync/tasks", 
@@ -44,12 +42,12 @@ def sync_tasks_from_client():
         data = request.get_json()
         if not data:
             return jsonify({"status": "error", "message": "No JSON data received"}), 400
-        
+
         tasks = data.get("tasks", [])
         conn = get_conn()
         cur = conn.cursor()
         cur.execute("DELETE FROM tasks")
-        
+
         count = 0
         for task in tasks:
             cur.execute(
@@ -68,26 +66,24 @@ def sync_tasks_from_client():
                 )
             )
             count += 1
-        
+
         conn.commit()
         conn.close()
         return jsonify({"status": "success", "message": f"Sincronizadas {count} tareas"})
-    
+
     except Exception as e:
         print(f"Error en POST /sync/tasks: {e}")
         return jsonify({"status": "error", "message": f"Error: {str(e)}"}), 500
 
-# --- ¡CAMBIO AÑADIDO! (Webhook de GitHub) ---
 @app.route("/github-webhook-secreto-1a9b2c8d", methods=["POST"])
 def github_webhook():
-    """
-    Recibe el "aviso" de GitHub y ejecuta el script de despliegue.
-    """
     print("¡Webhook de GitHub recibido! Iniciando despliegue...")
     try:
-        # Llama al script deploy.sh
-        # ¡IMPORTANTE! Cambia esto por tu ruta real
-        subprocess.Popen(["/home/xrdpuser/ProgramaTareas/deploy.sh"])
+        # --- ¡CORRECCIÓN AQUÍ! ---
+        # Reemplaza esta ruta por la que te dio el comando 'pwd'
+        ruta_script = "/home/jose/ProgramaTareas/deploy.sh" 
+
+        subprocess.Popen([ruta_script])
         return jsonify({"status": "despliegue iniciado"}), 200
     except Exception as e:
         print(f"Error al ejecutar deploy.sh: {e}")
@@ -103,31 +99,21 @@ if __name__ == "__main__":
     except Exception:
         server_timezone = pytz.utc
     scheduler = BackgroundScheduler(daemon=True, timezone=server_timezone)
-    
-    # 1. Resumen general de tareas cada 2 horas (en horas pares)
+
     scheduler.add_job(
         telegram_client.send_full_summary,
-        trigger='cron',
-        hour='*/2',
-        minute='0'
+        trigger='cron', hour='*/2', minute='0'
     )
-    
-    # 2. Recordatorio urgente cada 15 minutos
     scheduler.add_job(
         telegram_client.check_and_send_expiry_reminders, 'interval', minutes=15
     )
-    
-    # 3. Polling de comandos del bot cada 5 segundos
     scheduler.add_job(
         telegram_client.check_for_messages, 'interval', seconds=5
     )
-    
     scheduler.start()
-    
+
     print("Scheduler iniciado con 3 tareas: Resumen (c/ 2h en hora par), Recordatorio Urgente (c/ 15m) y Polling (c/ 5s).")
-    
+
     atexit.register(lambda: scheduler.shutdown())
     print(f"Iniciando servidor Flask en puerto 8080...")
     app.run(host="0.0.0.0", port=8080, debug=False)
-
-
