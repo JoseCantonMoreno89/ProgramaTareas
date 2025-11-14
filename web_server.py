@@ -94,7 +94,7 @@ if __name__ == "__main__":
     
     # 3. (EXISTENTE) Polling de comandos del bot cada 5 segundos
     scheduler.add_job(
-        telegram_client.check_for_messages, 'interval', hours=2
+        telegram_client.check_for_messages, 'interval', seconds=5
     )
     
     scheduler.start()
@@ -103,6 +103,7 @@ if __name__ == "__main__":
     atexit.register(lambda: scheduler.shutdown())
     print(f"Iniciando servidor Flask en puerto 8080...")
     app.run(host="0.0.0.0", port=8080, debug=False)
+
 
 
 
