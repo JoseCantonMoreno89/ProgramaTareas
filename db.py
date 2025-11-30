@@ -30,7 +30,6 @@ def init_db():
         whatsapp_sent INTEGER DEFAULT 0
     )
     """)
-    # Migración segura por si faltan columnas antiguas
     try:
         cur.execute("SELECT tags FROM tasks LIMIT 1")
     except sqlite3.OperationalError:
@@ -38,10 +37,8 @@ def init_db():
     conn.commit()
     conn.close()
 
-# --- FUNCIONES DE LECTURA ---
-
+# --- LECTURA ---
 def list_all_tasks():
-    """Obtiene TODAS las tareas."""
     conn = get_conn()
     cur = conn.cursor()
     cur.execute("SELECT * FROM tasks ORDER BY due")
@@ -57,10 +54,8 @@ def get_task_by_title(title: str) -> Optional[Dict]:
     conn.close()
     return dict(row) if row else None
 
-# --- FUNCIONES DE ESCRITURA (ACCIONES DEL BOT) ---
-
+# --- ESCRITURA ---
 def add_task_from_bot(title: str, description: str = ""):
-    """Añade una tarea nueva."""
     conn = get_conn()
     cur = conn.cursor()
     cur.execute("INSERT INTO tasks (title, description, status) VALUES (?, ?, 'pending')", (title, description))
@@ -68,7 +63,6 @@ def add_task_from_bot(title: str, description: str = ""):
     conn.close()
 
 def update_task_description(task_id: int, new_desc: str):
-    """[NUEVO] Modifica la descripción de una tarea existente."""
     conn = get_conn()
     cur = conn.cursor()
     cur.execute("UPDATE tasks SET description = ? WHERE id = ?", (new_desc, task_id))
@@ -76,7 +70,6 @@ def update_task_description(task_id: int, new_desc: str):
     conn.close()
 
 def delete_task_by_id(task_id: int):
-    """[NUEVO] Elimina una tarea por su ID exacto (más seguro para la IA)."""
     conn = get_conn()
     cur = conn.cursor()
     cur.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
@@ -93,16 +86,18 @@ def delete_task_by_title(title: str):
         conn.commit()
     conn.close()
 
-# --- CAMBIOS DE ESTADO ---
+# --- ¡NUEVA FUNCIÓN!: BORRAR TODO ---
+def delete_all_tasks():
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM tasks")
+    conn.commit()
+    conn.close()
 
-def mark_as_principal_by_title(title: str):
-    _update_status_by_title(title, 'principal')
-
-def mark_done_by_title(title: str):
-    _update_status_by_title(title, 'done')
-
-def mark_pending_by_title(title: str):
-    _update_status_by_title(title, 'pending')
+# --- ESTADOS ---
+def mark_as_principal_by_title(title: str): _update_status_by_title(title, 'principal')
+def mark_done_by_title(title: str): _update_status_by_title(title, 'done')
+def mark_pending_by_title(title: str): _update_status_by_title(title, 'pending')
 
 def _update_status_by_title(title: str, status: str):
     conn = get_conn()
