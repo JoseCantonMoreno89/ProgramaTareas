@@ -20,9 +20,11 @@ services:
       # (Asegúrate de que estén rellenas)
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
 
 volumes:
   reminders-db-data:
+
 
 
 
