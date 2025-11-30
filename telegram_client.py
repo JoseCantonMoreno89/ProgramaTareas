@@ -6,11 +6,13 @@ from telegram import InlineKeyboardMarkup, InlineKeyboardButton
 from datetime import datetime
 import pytz 
 import google.generativeai as genai 
+import re
 
 from db import (
     list_all_tasks, mark_as_principal_by_title, mark_done_by_title, 
     mark_pending_by_title, get_task_by_title, add_task_from_bot, 
-    delete_task_by_title, update_task_description, delete_task_by_id
+    delete_task_by_title, update_task_description, delete_task_by_id,
+    delete_all_tasks # <-- Importamos la nueva función
 )
 
 # --- CONFIGURACIÓN ---
@@ -22,10 +24,9 @@ model = None
 if GEMINI_API_KEY:
     try:
         genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel('models/gemini-2.5-flash')
-        print("✅ Gemini AI (Modo Avanzado) conectado.")
+        model = genai.GenerativeModel('gemini-1.5-flash')
     except Exception as e:
-        print(f"❌ Error Gemini: {e}")
+        print(f"Error Gemini: {e}")
 
 bot = None
 if BOT_TOKEN: bot = telegram.Bot(token=BOT_TOKEN)
@@ -34,7 +35,6 @@ LAST_UPDATE_ID = None
 try: SERVER_TIMEZONE = pytz.timezone("Europe/Madrid")
 except: SERVER_TIMEZONE = pytz.utc
 
-# --- CONTEXTO ---
 def get_tasks_context():
     tasks = list_all_tasks()
     if not tasks: return "No hay tareas registradas."
@@ -46,108 +46,120 @@ def get_tasks_context():
     return text
 
 # ==============================================================================
-# 🧠 CEREBRO DE EJECUCIÓN (Action Engine)
+# 🧠 PROCESADOR DE COMANDOS IA
 # ==============================================================================
 
 def process_ai_command(user_text):
-    """
-    Analiza el texto del usuario y decide si chatear o EJECUTAR una acción.
-    Devuelve (respuesta_texto, accion_ejecutada_bool)
-    """
     if not model: return "❌ IA no disponible.", False
     
     tasks_text = get_tasks_context()
     
-    # Prompt de Ingeniería para forzar salida JSON controlada
+    # Prompt actualizado con DELETE_ALL
     prompt = f"""
     Eres un Gestor de Tareas Inteligente. Tienes acceso directo a la base de datos.
     
-    TUS HERRAMIENTAS:
-    1. CREAR: Para nuevas tareas.
-    2. BORRAR: Para eliminar tareas (necesitas el ID).
-    3. MODIFICAR: Para cambiar la descripción (necesitas el ID).
-    4. CHAT: Para conversar, aconsejar o resumir.
+    HERRAMIENTAS DISPONIBLES:
+    1. CREAR ("create"): Para nuevas tareas.
+    2. BORRAR ("delete"): Para eliminar tareas individuales (REQUIERE ID NUMÉRICO).
+    3. BORRAR TODO ("delete_all"): Para borrar TODAS las tareas.
+    4. MODIFICAR ("update_desc"): Para cambiar descripciones (REQUIERE ID NUMÉRICO).
+    5. CHAT: Para conversar normal.
 
-    INSTRUCCIONES CLAVE:
-    - Si el usuario quiere realizar una acción (crear, borrar, cambiar), DEBES responder con un JSON.
-    - Si el usuario solo charla, responde con texto normal (sin JSON).
+    INSTRUCCIONES:
+    - Si detectas una intención de acción, devuelve SOLO el JSON.
+    - Si es charla, devuelve texto normal.
 
-    FORMATO JSON OBLIGATORIO PARA ACCIONES:
+    FORMATO JSON:
     {{
-        "action": "create" | "delete" | "update_desc",
+        "action": "create" | "delete" | "update_desc" | "delete_all",
         "params": {{
-            "title": "...",      // Para create
-            "description": "...", // Para create o update_desc
-            "id": 123            // Para delete o update_desc
+            "title": "...", 
+            "description": "...", 
+            "id": 123  // Debe ser un número entero
         }},
-        "reply": "Texto confirmando la acción al usuario"
+        "reply": "Texto de confirmación para el usuario"
     }}
 
-    CONTEXTO ACTUAL:
+    CONTEXTO:
     {tasks_text}
 
-    USUARIO DICE: "{user_text}"
+    USUARIO: "{user_text}"
     """
 
     try:
-        # Pedimos respuesta
         response = model.generate_content(prompt)
         raw_text = response.text.strip()
         
-        # Intentamos detectar si es JSON (limpiando posibles bloques de código ```json ...)
+        # Limpieza de JSON
         clean_text = raw_text.replace("```json", "").replace("```", "").strip()
         
         if clean_text.startswith("{") and clean_text.endswith("}"):
-            # ¡Es un comando!
             cmd = json.loads(clean_text)
             action = cmd.get("action")
             params = cmd.get("params", {})
             reply = cmd.get("reply", "Hecho.")
             
+            # --- ACCIÓN: CREAR ---
             if action == "create":
                 add_task_from_bot(params.get("title"), params.get("description", ""))
                 return f"✅ {reply}", True
                 
+            # --- ACCIÓN: BORRAR (Uno) ---
             elif action == "delete":
                 tid = params.get("id")
                 if tid:
-                    delete_task_by_id(int(tid))
-                    return f"🗑️ {reply}", True
+                    # Limpieza extra por si la IA envía "ID 5" en vez de "5"
+                    try:
+                        clean_id = int(str(tid).lower().replace("id", "").strip())
+                        delete_task_by_id(clean_id)
+                        return f"🗑️ {reply}", True
+                    except ValueError:
+                        return f"⚠️ No entendí qué ID borrar. La IA envió: '{tid}'", False
                 
+            # --- ACCIÓN: BORRAR TODO ---
+            elif action == "delete_all":
+                delete_all_tasks()
+                return f"🔥☢️ {reply} (Se han borrado todas las tareas)", True
+
+            # --- ACCIÓN: MODIFICAR ---
             elif action == "update_desc":
                 tid = params.get("id")
                 new_desc = params.get("description")
                 if tid and new_desc:
-                    update_task_description(int(tid), new_desc)
-                    return f"📝 {reply}", True
+                    try:
+                        clean_id = int(str(tid).lower().replace("id", "").strip())
+                        update_task_description(clean_id, new_desc)
+                        return f"📝 {reply}", True
+                    except ValueError:
+                         return f"⚠️ ID inválido para modificar.", False
             
-            return reply, True # Acción reconocida pero genérica
+            return reply, True
             
         else:
-            # Es charla normal
             return raw_text, False
 
     except Exception as e:
         print(f"Error procesando IA: {e}")
-        return "Tuve un error interno procesando tu solicitud.", False
+        # Devolvemos el error al chat para que sepas qué pasa
+        return f"🐛 Error interno: {str(e)}", False
 
 # ==============================================================================
-# RUTINAS AUTOMÁTICAS (Resumen y Alertas)
+# RUTINAS y MANEJO (Sin cambios mayores, solo mantener funcionalidad)
 # ==============================================================================
 
 def send_routine_check():
     if not bot or not model: return
     tasks = list_all_tasks()
+    # Si no hay tareas activas, no molestamos
     if not any(t['status'] != 'done' for t in tasks): return
 
-    prompt = f"Resume brevemente estas tareas para motivar al usuario:\n{get_tasks_context()}"
+    prompt = f"Resume estas tareas para motivar:\n{get_tasks_context()}"
     try:
         res = model.generate_content(prompt)
-        bot.send_message(chat_id=CHAT_ID, text=f"⏰ *Resumen 5h*\n{res.text}", parse_mode=telegram.ParseMode.MARKDOWN)
+        bot.send_message(chat_id=CHAT_ID, text=f"⏰ *Resumen IA*\n{res.text}", parse_mode='Markdown')
     except: pass
 
 def check_smart_urgency():
-    # (Lógica simplificada para brevedad, mantiene funcionalidad anterior)
     if not bot: return
     now = datetime.now(SERVER_TIMEZONE)
     tasks = list_all_tasks()
@@ -155,24 +167,22 @@ def check_smart_urgency():
     for t in tasks:
         if t['status'] == 'done' or not t.get('due'): continue
         try:
-            due = datetime.fromisoformat(t['due']).replace(tzinfo=None)
-            due = SERVER_TIMEZONE.localize(due)
+            # Parseo robusto
+            due = datetime.fromisoformat(t['due'])
+            if due.tzinfo is None: due = SERVER_TIMEZONE.localize(due)
+            else: due = due.astimezone(SERVER_TIMEZONE)
+            
             delta = (due - now).total_seconds()
             if 0 < delta < 3600: urgent.append(f"🚨 {t['title']} (<1h)")
-            elif 0 < delta < 14400 and now.minute < 15: urgent.append(f"⚠️ {t['title']} (<4h)")
+            elif 3600 <= delta < 14400 and now.minute < 15: urgent.append(f"⚠️ {t['title']} (<4h)")
         except: pass
     
     if urgent:
-        msg = "¡Atención!\n" + "\n".join(urgent)
-        bot.send_message(chat_id=CHAT_ID, text=msg)
-
-# ==============================================================================
-# MANEJO DE TELEGRAM
-# ==============================================================================
+        bot.send_message(chat_id=CHAT_ID, text="¡Atención!\n" + "\n".join(urgent))
 
 def _handle_start_command(msg=None, query=None):
     kb = [[InlineKeyboardButton("Ver Tareas", callback_data="list_tasks")]]
-    text = "🤖 *Agente Full-Access*\nAhora puedo CREAR, BORRAR y MODIFICAR tareas si me lo pides."
+    text = "🤖 *Agente IA Actualizado*\nPuedo crear, modificar, borrar una o **borrar todas** las tareas."
     if query: query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb), parse_mode='Markdown')
     else: bot.send_message(msg.chat_id, text, reply_markup=InlineKeyboardMarkup(kb), parse_mode='Markdown')
 
@@ -189,17 +199,12 @@ def _handle_list_tasks(query):
 def _process_message(msg):
     if not msg or not msg.text: return
     text = msg.text.strip()
-    
     if text == "/start": 
         _handle_start_command(msg=msg)
         return
-
-    # Enviamos "Escribiendo..." porque la IA va a pensar y quizás ejecutar DB
+    
     bot.send_chat_action(chat_id=msg.chat_id, action=telegram.ChatAction.TYPING)
-    
-    # Procesamos con el motor inteligente
-    reply_text, action_done = process_ai_command(text)
-    
+    reply_text, _ = process_ai_command(text)
     bot.send_message(chat_id=msg.chat_id, text=reply_text)
 
 def _process_callback(query):
@@ -207,7 +212,6 @@ def _process_callback(query):
     data = query.data
     if data == "main_menu": _handle_start_command(query=query)
     elif data == "list_tasks": _handle_list_tasks(query)
-    # (Resto de botones simplificados, la lógica clave es la IA arriba)
 
 def check_for_messages():
     global LAST_UPDATE_ID
