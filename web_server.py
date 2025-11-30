@@ -1,8 +1,6 @@
 # web_server.py
-# test 222
-from flask import Flask, request, Response, jsonify
+from flask import Flask, request, jsonify
 from db import get_conn, init_db
-import sqlite3
 import atexit
 from apscheduler.schedulers.background import BackgroundScheduler
 import telegram_client
@@ -11,11 +9,13 @@ import subprocess
 
 app = Flask(__name__)
 
+# --- RUTAS DE LA API ---
+
 @app.route("/")
 def home():
     return jsonify({
         "status": "active",
-        "service": "Task Sync Server (con Telegram Bot - Modo Polling)",
+        "service": "Task Sync Server + Gemini AI Agent",
         "endpoints": { 
             "get_tasks": "GET /sync/tasks", 
             "sync_tasks": "POST /sync/tasks", 
@@ -30,12 +30,15 @@ def health_check():
 
 @app.route("/sync/tasks", methods=["GET"])
 def get_all_tasks():
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM tasks ORDER BY due")
-    tasks = [dict(row) for row in cur.fetchall()]
-    conn.close()
-    return jsonify({"tasks": tasks})
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM tasks ORDER BY due")
+        tasks = [dict(row) for row in cur.fetchall()]
+        conn.close()
+        return jsonify({"tasks": tasks})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route("/sync/tasks", methods=["POST"])
 def sync_tasks_from_client():
@@ -47,6 +50,8 @@ def sync_tasks_from_client():
         tasks = data.get("tasks", [])
         conn = get_conn()
         cur = conn.cursor()
+        
+        # Reemplazo total para asegurar sincronización exacta
         cur.execute("DELETE FROM tasks")
 
         count = 0
@@ -80,61 +85,67 @@ def sync_tasks_from_client():
 def github_webhook():
     print("¡Webhook de GitHub recibido! Iniciando despliegue...")
     try:
-        # --- ¡CORRECCIÓN AQUÍ! ---
-        # Reemplaza esta ruta por la que te dio el comando 'pwd'
+        # Ruta absoluta dentro del contenedor Docker
         ruta_script = "/app/deploy.sh" 
-
         subprocess.Popen([ruta_script])
         return jsonify({"status": "despliegue iniciado"}), 200
     except Exception as e:
         print(f"Error al ejecutar deploy.sh: {e}")
         return jsonify({"status": "error"}), 500
 
-# --- Inicio de la Aplicación ---
+# --- INICIO DE LA APLICACIÓN Y SCHEDULER ---
+
 if __name__ == "__main__":
-    print("Iniciando aplicación de servidor...")
+    print("--- Iniciando Servidor de Tareas con IA ---")
+    
+    # 1. Inicializar Base de Datos
     init_db()
-    print("Configurando el programador de tareas (APScheduler)...")
+
+    # 2. Configurar Zona Horaria
     try:
         server_timezone = pytz.timezone("Europe/Madrid")
     except Exception:
         server_timezone = pytz.utc
+        print("Aviso: Usando UTC por defecto.")
+
+    # 3. Configurar el Programador (Scheduler)
+    print("Configurando Agente IA y Scheduler...")
     scheduler = BackgroundScheduler(daemon=True, timezone=server_timezone)
 
+    # TAREA A: Resumen de Rutina (Cada 5 horas)
+    # Gemini te dará un resumen general y motivacional.
     scheduler.add_job(
-        telegram_client.send_full_summary,
-        trigger='cron', hour='*/2', minute='0'
+        telegram_client.send_routine_check,
+        trigger='interval', 
+        hours=5,
+        id='routine_check'
     )
+
+    # TAREA B: Monitor de Urgencia Inteligente (Cada 15 minutos)
+    # Ejecuta 'check_smart_urgency', que decide internamente si enviarte mensaje
+    # cada hora (si faltan < 4h) o cada 15 min (si falta < 1h).
     scheduler.add_job(
-        telegram_client.check_and_send_expiry_reminders, 'interval', minutes=15
+        telegram_client.check_smart_urgency, 
+        trigger='interval', 
+        minutes=15,
+        id='urgency_check'
     )
+
+    # TAREA C: Polling de Mensajes (Cada 5 segundos)
+    # Para que puedas chatear con la IA en tiempo casi real.
     scheduler.add_job(
-        telegram_client.check_for_messages, 'interval', seconds=5
+        telegram_client.check_for_messages, 
+        trigger='interval', 
+        seconds=5,
+        id='msg_polling'
     )
+
     scheduler.start()
+    print("✅ Scheduler activo: Resumen (5h), Urgencia (Dinámica) y Chat (5s).")
 
-    print("Scheduler iniciado con 3 tareas: Resumen (c/ 2h en hora par), Recordatorio Urgente (c/ 15m) y Polling (c/ 5s).")
-
+    # Asegurar que el scheduler se apague al cerrar la app
     atexit.register(lambda: scheduler.shutdown())
-    print(f"Iniciando servidor Flask en puerto 8080...")
+
+    # 4. Arrancar Flask
+    print("🚀 Servidor escuchando en puerto 8080...")
     app.run(host="0.0.0.0", port=8080, debug=False)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
