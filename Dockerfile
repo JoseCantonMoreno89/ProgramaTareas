@@ -3,30 +3,29 @@ FROM python:3.9-slim
 
 WORKDIR /app
 
-# --- ¡CAMBIO AQUÍ! ---
-# Instalar dependencias del sistema: git, pip y curl
+# Instalar dependencias del sistema
 RUN apt-get update && apt-get install -y git python3-pip curl
 
-# Instalar docker-compose (el binario oficial)
-RUN curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+# --- CORRECCIÓN: Instalar Docker Compose V2 (Más reciente) ---
+RUN curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
 RUN chmod +x /usr/local/bin/docker-compose
 
+# Configurar SSH para GitHub (si lo usas)
 RUN mkdir -p /root/.ssh && \
     ssh-keyscan github.com >> /root/.ssh/known_hosts
 
-# Forzamos la instalación de pytz
+# Dependencias de Python
 RUN pip install --no-cache-dir pytz
-# --- FIN DEL CAMBIO ---
 
 COPY requirements-server.txt .
+# Aseguramos que se instalan las librerías nuevas (google-generativeai)
 RUN pip install --no-cache-dir -r requirements-server.txt
 
 COPY . .
 
-# Dar permisos de ejecución a AMBOS scripts
+# Permisos
 RUN chmod +x start.sh
 RUN chmod +x deploy.sh
 
 EXPOSE 8080
 CMD ["./start.sh"]
-
